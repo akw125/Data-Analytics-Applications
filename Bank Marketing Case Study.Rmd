@@ -1,0 +1,167 @@
+---
+title: "Bank Marketing Case Study"
+author: "Ashley Windham"
+date: "9/8/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(VIM)
+library(naniar)
+library(gdata)
+library(missMDA)
+library(caret)
+```
+
+## I. Executive Summary
+
+## II. The Problem
+
+- A. Introduction/Background
+- B. Purpose of study/importance of study/statement of problem
+- C. Questions to be answered/conceptual statement of hypotheses
+- D. Outline of remainder of report (brief)
+
+## III. Review of Related Literature
+
+- A. Acquaint reader with existing methodologies used in this area.
+
+## IV. Methodology
+
+- A. Identification, classification and operationalization of variables.
+- B. Statements of hypotheses being tested and/or models being developed.
+- C. Sampling techniques, if full data is not being used.
+- D. Data collection process, including data sources, data size, etc.  Primary or secondary?
+- E. Modeling analysis/techniques used
+- F. Methodological assumptions and limitations.
+
+## V. Data
+
+- A. Data cleaning
+- B. Data preprocessing
+- C. Data limitations
+
+## VI. Findings (Results)
+
+- A. Results presented in tables or charts when appropriate
+- B. Results reported with respect to hypotheses/models.
+- C. Factual information kept separate from interpretation, inference and evaluation.
+
+## VII. Conclusions and Recommendations
+
+- A. Discuss alternative methodologies
+
+```{r cars}
+d=read.table("bank-additional.csv", header=TRUE,sep=";")
+d2=read.table("bank-additional.csv", header=TRUE,sep=";")
+```
+
+
+For data cleaning, there are quite a bit of missing values for 'default' with 803 missing values.  Instead of dropping these missing values, I think we should use the unknown as a level.  Alternatively, we could try to impute the missing values.  Also, 'education', 'housing' and 'loan' also have missing values (167, 105 and 105, respectively).  We could do something similar and incorporate the unknowns as a level, impute or drop all together.  The two remaining columns with missing values are marital and job with 39 and 11 missing values respectively.  These are small numbers and could defintely be dropped or we could be uniform in adding unknown as levels.  Below is some of the analysis I have done for the missing data.
+```{r pressure, echo=FALSE}
+
+
+# Missing data
+sum(isUnknown(d$age, unknown='unknown')) #0
+sum(isUnknown(d$job, unknown='unknown')) #39
+sum(isUnknown(d$marital, unknown='unknown')) #11
+sum(isUnknown(d$education, unknown='unknown')) #167
+sum(isUnknown(d$default, unknown='unknown')) #803
+sum(isUnknown(d$housing, unknown='unknown')) #105
+sum(isUnknown(d$loan, unknown='unknown')) #105
+sum(isUnknown(d$contact, unknown='unknown')) #0 
+sum(isUnknown(d$month, unknown='unknown')) #0
+sum(isUnknown(d$day_of_week, unknown='unknown')) #0
+sum(isUnknown(d$duration, unknown='unknown')) # 0
+sum(isUnknown(d$campaign, unknown='unknown')) #0
+sum(isUnknown(d$pdays, unknown='unknown')) #0
+sum(isUnknown(d$previous, unknown='unknown')) # 0
+sum(isUnknown(d$poutcome, unknown='unknown')) #0
+sum(isUnknown(d$emp.var.rate, unknown='unknown')) #0
+sum(isUnknown(d$cons.price.idx, unknown='unknown')) #0
+sum(isUnknown(d$cons.conf.idx, unknown='unknown')) #0
+sum(isUnknown(d$euribor3m, unknown='unknown')) #0
+sum(isUnknown(d$nr.employed, unknown='unknown')) #0
+sum(isUnknown(d$y, unknown='unknown'))
+
+
+d$job = unknownToNA(d$job, unknown='unknown')
+d$marital = unknownToNA(d$marital, unknown='unknown')
+d$education = unknownToNA(d$education, unknown='unknown')
+d$default = unknownToNA(d$default, unknown='unknown')
+d$housing = unknownToNA(d$housing, unknown='unknown')
+d$loan = unknownToNA(d$loan, unknown='unknown')
+
+
+res<-summary(aggr(d, sortVar=TRUE))$combinations
+
+```
+```{r}
+matrixplot(d, sortby = 5)
+vis_miss(d, sort_miss = TRUE) 
+pct_miss(d) 
+n_complete(d)
+```
+```{r}
+str(train)
+d2$job = as.factor(d2$job)
+d2$default = as.factor(d2$default)
+d2$marital = as.factor(d2$marital)
+d2$education = as.factor(d2$education)
+d2$housing = as.factor(d2$housing)
+d2$loan = as.factor(d2$loan)
+d2$contact = as.factor(d2$contact)
+d2$month = as.factor(d2$month)
+d2$day_of_week = as.factor(d2$day_of_week)
+d2$poutcome = as.factor(d2$poutcome)
+d2$y = as.factor(d2$y)
+
+res2<-summary(aggr(d2, sortVar=TRUE))$combinations
+```
+
+The data is also imbalanced with the majority of the targets being 'no' (3668) and the remaining 451 as 'yes'.  Should we consider balancing the data?  This may depend on what model we chose to go with.  From reading I have done, I don't think logistic regression would require balanced data.  I would like to hear your thoughts.
+```{r}
+plot(d2$y)
+summary(d2$y)
+```
+
+
+I found two columns that were flagged for being highly correlated, Euribor3m and Emp.var.rate.  These were also highly correlated with the NR employed feature.  If we choose to drop highly correlated variables, we can keep the NR employed variable.
+```{r}
+#Finding highly correlated variables
+correlationMatrix = cor(d2[c(1,11:14, 16:20)])
+
+correlationMatrix
+
+highlyCorrelated = findCorrelation(correlationMatrix, cutoff=0.70, verbose = TRUE)
+```
+
+I put together one glm model with the caret package.  I left out duration for reasons laid out in the instructions as well as the two out of three highly correlated variable mentioned above. It does spit out some warnings though.  
+```{r}
+#split data for test/train
+set.seed(10)
+dt = sort(sample(nrow(d2), nrow(d2)*.7))
+train<-d2[dt,]
+test<-d2[-dt,]
+
+
+train_control = trainControl(method="repeatedcv", number=10, repeats=3)
+
+model.fit = train(y~ age + job + marital + education +default + housing +default + housing +loan + contact + month + day_of_week
+                  + campaign + pdays + previous + poutcome + cons.price.idx + cons.conf.idx + nr.employed, 
+                  data = train, method = "glm", trControl = train_control)
+
+model.fit 
+
+pred.model = predict(model.fit, test)
+confusionMatrix(pred.model,test$y)
+
+
+length(model.fit$coefficients) > model.fit$rank
+
+m1 = glm(formula = y~ age + job + marital + education +default + housing +default + housing +loan + contact + month + day_of_week + campaign + pdays + previous + poutcome + cons.price.idx + cons.conf.idx + nr.employed,, data = train, family = binomial)
+summary(m1)
+```
+
+
